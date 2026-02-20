@@ -4,11 +4,30 @@ FastAPI application for Twilio AI voice assistant.
 This is the main entry point of the application that sets up routes
 and initializes the FastAPI server.
 """
-from fastapi import FastAPI, Request
+import asyncio
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import Response
 from routes.call_routes import handle_make_call, handle_voice, handle_process
+from services.audio_cache import get_audio
+from services.conversation_manager import start_cleanup_task
+from services.http_client import close_http_client
 
 # Initialize FastAPI application
 app = FastAPI(title="Twilio AI Voice Assistant", version="1.0.0")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on application startup."""
+    asyncio.create_task(start_cleanup_task())
+    print("✅ Started conversation cleanup background task")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on application shutdown."""
+    await close_http_client()
+    print("✅ Closed HTTP client connections")
 
 
 @app.post("/call")
@@ -35,3 +54,23 @@ async def process(request: Request):
     Transcribes speech, generates AI response, and plays it back.
     """
     return await handle_process(request)
+
+
+@app.get("/audio-stream/{audio_id}")
+async def serve_audio(audio_id: str):
+    """
+    Serve audio from in-memory cache (no file system access).
+    """
+    audio_data = await get_audio(audio_id)
+    
+    if audio_data is None:
+        raise HTTPException(status_code=404, detail="Audio not found")
+    
+    return Response(
+        content=audio_data,
+        media_type="audio/wav",
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Disposition": f"inline; filename={audio_id}.wav"
+        }
+    )

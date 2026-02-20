@@ -30,3 +30,5 @@ htmlcov/
 
 # Logs
 *.log
+
+static/
