@@ -1,12 +1,11 @@
-"""
-LLM service for generating AI responses using Groq.
-"""
-from typing import List, Dict
-from groq import Groq
+"""LLM service for generating AI responses using Groq with streaming."""
+import time
+from typing import List, Dict, AsyncGenerator
+from groq import AsyncGroq
 from config import GROQ_API_KEY
 
 # Initialize Groq client
-groq_client = Groq(api_key=GROQ_API_KEY)
+groq_client = AsyncGroq(api_key=GROQ_API_KEY)
 
 SYSTEM_PROMPT = """CRITICAL LANGUAGE POLICY (MANDATORY – OVERRIDES ALL OTHER INSTRUCTIONS):
 
@@ -16,7 +15,7 @@ SYSTEM_PROMPT = """CRITICAL LANGUAGE POLICY (MANDATORY – OVERRIDES ALL OTHER I
 4. If the user speaks in mixed Hindi and English (Hinglish), respond in simple Hinglish.
 5. Never default to English automatically.
 6. If you are unsure about the user's preferred language, ask:
-   "आप किस भाषा में बात करना चाहेंगे — हिंदी या इंग्लिश?"
+   "आप किस भाषा में बात करना चाहेंगे — हिंदी या इंग्लिश?"
 7. Once the user selects a language, continue the entire conversation strictly in that language unless the user switches.
 8. Keep all responses short (maximum 2–3 sentences) and suitable for a phone conversation.
 
@@ -131,9 +130,56 @@ English:
 Thank you for your time. I have noted your details and scheduled the survey. Have a great day."""
 
 
-def get_llm_response(user_text: str, conversation_history: List[Dict[str, str]] = None) -> str:
+async def stream_llm_response(user_text: str, conversation_history: List[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
     """
-    Generate AI response using Groq LLM with conversation context.
+    Stream AI response using Groq's LLM with streaming.
+    Yields text chunks as they're generated.
+    
+    Args:
+        user_text: The user's input text
+        conversation_history: Previous messages in the conversation
+        
+    Yields:
+        Text chunks from the LLM
+    """
+    # Build messages array with conversation history
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    # Add conversation history if available (limit to last 10)
+    if conversation_history:
+        for msg in conversation_history[-10:]:
+            messages.append(msg)
+    
+    # Add current user message
+    messages.append({"role": "user", "content": user_text})
+    
+    try:
+        llm_api_start = time.time()
+        stream = await groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            max_tokens=100,
+            temperature=0.5,
+            stream=True
+        )
+        
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+        
+        llm_api_time = time.time() - llm_api_start
+        print(f"  -> Groq LLM Stream: {llm_api_time:.3f}s")
+        
+    except Exception as e:
+        print(f"❌ LLM Stream Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        yield "माफ़ कीजिये, अभी तकनीकी समस्या है।"
+
+
+async def get_llm_response(user_text: str, conversation_history: List[Dict[str, str]] = None) -> str:
+    """
+    Generate complete AI response using Groq LLM (collects full streaming response).
     
     Args:
         user_text: The user's input text
@@ -142,22 +188,7 @@ def get_llm_response(user_text: str, conversation_history: List[Dict[str, str]] 
     Returns:
         AI-generated response text
     """
-    # Build messages array with conversation history
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    
-    # Add conversation history if available
-    if conversation_history:
-        messages.extend(conversation_history)
-    
-    # Add current user message
-    messages.append({"role": "user", "content": user_text})
-    
-    completion = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=messages,
-        max_tokens=150,
-        temperature=0.7,
-        top_p=0.95
-    )
-    
-    return completion.choices[0].message.content
+    full_response = ""
+    async for chunk in stream_llm_response(user_text, conversation_history):
+        full_response += chunk
+    return full_response.strip()

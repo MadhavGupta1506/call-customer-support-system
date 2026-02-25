@@ -3,6 +3,7 @@ Response cache for common phrases to reduce latency.
 """
 from typing import Dict, Optional
 import hashlib
+import asyncio
 
 # Pre-generated TTS audio URLs for common responses
 _tts_cache: Dict[str, str] = {}
@@ -20,18 +21,39 @@ def get_response_hash(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 
-def get_cached_tts(text: str) -> Optional[str]:
+async def get_cached_tts(text: str) -> Optional[str]:
     """
     Get cached TTS audio URL for common phrases.
+    Validates that audio still exists in memory before returning.
     
     Args:
         text: The text to check for cached audio
         
     Returns:
-        Cached audio URL if found, None otherwise
+        Cached audio URL if valid, None if expired or not found
     """
     text_hash = get_response_hash(text.strip().lower())
-    return _tts_cache.get(text_hash)
+    cached_url = _tts_cache.get(text_hash)
+    
+    if not cached_url:
+        return None
+    
+    # Validate that audio still exists in memory
+    try:
+        audio_id = cached_url.split('/')[-1]
+        from services.audio_cache import get_audio
+        
+        audio_data = await get_audio(audio_id)
+        if audio_data:
+            return cached_url  # Audio still valid
+        else:
+            # Audio expired, remove from cache
+            del _tts_cache[text_hash]
+            return None
+    except Exception:
+        # If validation fails, remove from cache
+        _tts_cache.pop(text_hash, None)
+        return None
 
 
 def cache_tts(text: str, audio_url: str):
@@ -44,7 +66,7 @@ def cache_tts(text: str, audio_url: str):
     """
     text_hash = get_response_hash(text.strip().lower())
     _tts_cache[text_hash] = audio_url
-    print(f"💾 Cached TTS for: '{text[:30]}...'")
+    # print(f"💾 Cached TTS for: '{text[:30]}...'")
 
 
 def should_cache_response(text: str) -> bool:

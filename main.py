@@ -5,12 +5,13 @@ This is the main entry point of the application that sets up routes
 and initializes the FastAPI server.
 """
 import asyncio
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket
 from fastapi.responses import Response
-from routes.call_routes import handle_make_call, handle_voice, handle_process
+from routes.call_routes import handle_make_call, handle_voice, handle_voice_stream, handle_process
 from services.audio_cache import get_audio
 from services.conversation_manager import start_cleanup_task
 from services.http_client import close_http_client
+from services.media_stream import MediaStreamHandler
 
 # Initialize FastAPI application
 app = FastAPI(title="Twilio AI Voice Assistant", version="1.0.0")
@@ -47,6 +48,15 @@ async def voice(request: Request):
     return await handle_voice(request)
 
 
+@app.post("/voice-stream")
+async def voice_stream(request: Request):
+    """
+    Webhook endpoint for incoming calls using Media Streams (WebSocket).
+    Ultra-low latency real-time audio processing.
+    """
+    return await handle_voice_stream(request)
+
+
 @app.post("/process")
 async def process(request: Request):
     """
@@ -54,6 +64,16 @@ async def process(request: Request):
     Transcribes speech, generates AI response, and plays it back.
     """
     return await handle_process(request)
+
+
+@app.websocket("/media-stream")
+async def media_stream(websocket: WebSocket):
+    """
+    WebSocket endpoint for Twilio Media Streams.
+    Receives real-time audio, processes with VAD, and streams back responses.
+    """
+    handler = MediaStreamHandler()
+    await handler.handle_connection(websocket)
 
 
 @app.get("/audio-stream/{audio_id}")

@@ -11,14 +11,14 @@ _audio_cache: Dict[str, bytes] = {}
 _cache_lock = asyncio.Lock()
 
 
-async def store_audio(audio_id: str, audio_data: bytes, ttl_seconds: int = 300):
+async def store_audio(audio_id: str, audio_data: bytes, ttl_seconds: int = 900):
     """
     Store audio data in memory cache.
     
     Args:
         audio_id: Unique identifier for the audio
         audio_data: Raw audio bytes
-        ttl_seconds: Time to live in seconds (default 5 minutes)
+        ttl_seconds: Time to live in seconds (default 15 minutes)
     """
     async with _cache_lock:
         _audio_cache[audio_id] = audio_data
