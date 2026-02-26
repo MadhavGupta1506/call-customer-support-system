@@ -39,13 +39,13 @@ async def make_call():
     return await handle_make_call()
 
 
-@app.post("/voice")
-async def voice(request: Request):
-    """
-    Webhook endpoint for incoming calls.
-    Handles the initial call setup and welcome message.
-    """
-    return await handle_voice(request)
+# @app.post("/voice")
+# async def voice(request: Request):
+#     """
+#     Webhook endpoint for incoming calls.
+#     Handles the initial call setup and welcome message.
+#     """
+#     return await handle_voice(request)
 
 
 @app.post("/voice-stream")

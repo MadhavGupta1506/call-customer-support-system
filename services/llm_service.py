@@ -167,13 +167,7 @@ async def stream_llm_response(user_text: str, conversation_history: List[Dict[st
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
         
-        llm_api_time = time.time() - llm_api_start
-        print(f"  -> Groq LLM Stream: {llm_api_time:.3f}s")
-        
     except Exception as e:
-        print(f"❌ LLM Stream Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         yield "माफ़ कीजिये, अभी तकनीकी समस्या है।"
 
 

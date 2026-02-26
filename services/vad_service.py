@@ -30,8 +30,8 @@ class VoiceActivityDetector:
         self.ring_buffer = collections.deque(maxlen=30)  # 600ms buffer
         
         # Speech detection thresholds
-        self.speech_frames_threshold = 8  # Frames needed to trigger speech start
-        self.silence_frames_threshold = 15  # Frames needed to trigger speech end (300ms)
+        self.speech_frames_threshold = 6  # Frames needed to trigger speech start (120ms - moderate)
+        self.silence_frames_threshold = 18  # Frames needed to trigger speech end (360ms - moderate)
         
         # State tracking
         self.is_speaking = False
@@ -65,7 +65,6 @@ class VoiceActivityDetector:
         try:
             is_speech = self.vad.is_speech(frame_bytes, self.sample_rate)
         except Exception as e:
-            print(f"⚠️ VAD error: {e}")
             is_speech = False
         
         # Add to ring buffer for smoothing
@@ -90,13 +89,13 @@ class VoiceActivityDetector:
             # Speech just started
             self.is_speaking = True
             speech_started = True
-            print(f"🎤 Speech Started (confidence: {confidence:.2f})")
+            print(f"🎤 Speech started (confidence: {confidence:.2f})")
         
         elif self.is_speaking and self.consecutive_silence_frames >= self.silence_frames_threshold:
             # Speech just ended
             self.is_speaking = False
             speech_ended = True
-            print(f"🔇 Speech Ended (silence: {self.consecutive_silence_frames} frames)")
+            print(f"🔇 Speech ended (silence: {self.consecutive_silence_frames} frames)")
         
         return {
             'is_speech': is_speech,

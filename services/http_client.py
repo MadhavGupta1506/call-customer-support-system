@@ -16,6 +16,7 @@ def get_http_client() -> httpx.AsyncClient:
         _client = httpx.AsyncClient(
             timeout=15.0,
             http2=True,  # Enable HTTP/2 for faster multiplexing
+            verify=False,  # Disable SSL verification for local development
             limits=httpx.Limits(
                 max_connections=20,
                 max_keepalive_connections=10,

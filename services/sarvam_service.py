@@ -24,7 +24,6 @@ async def generate_sarvam_tts(text: str) -> str:
         # Check cache first for instant response (validates audio still exists)
         cached_url = await get_cached_tts(text)
         if cached_url:
-            print(f"⚡ Using cached TTS for: '{text[:50]}...'")
             return cached_url
         
         # print(f"🔊 Generating TTS for: '{text[:50]}...'")
@@ -46,17 +45,17 @@ async def generate_sarvam_tts(text: str) -> str:
         async with client as tts:
             audio_bytes = await tts.synthesize(text)
         
-        api_time = time.time() - api_start
-        print(f"  ↪ API Call Time: {api_time:.2f}s")
-        
         if audio_bytes:
+            # Validate it's a proper WAV file
+            if not audio_bytes.startswith(b'RIFF'):
+                return None
+            
             # Generate unique ID and store in memory cache
             audio_id = str(uuid.uuid4())
             await store_audio(audio_id, audio_bytes, ttl_seconds=900)  # 15 minutes
             
             # Return URL pointing to memory-served endpoint
             audio_url = f"{BASE_URL}/audio-stream/{audio_id}"
-            # print(f"✅ TTS Generated (in-memory): {audio_url}")
             
             # Cache common responses for faster future access
             if should_cache_response(text):
@@ -64,12 +63,8 @@ async def generate_sarvam_tts(text: str) -> str:
             
             return audio_url
         else:
-            print(f"❌ TTS Error: No audio generated")
             return None
     except Exception as e:
-        print(f"❌ TTS Exception: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return None
 
 
@@ -91,7 +86,6 @@ async def transcribe_with_sarvam(recording_url: str) -> str:
         print(f"🎤 Streaming from: {download_url}")
         
         # Download audio from Twilio
-        download_start = time.time()
         async with client.stream(
             'GET',
             download_url,
@@ -99,7 +93,6 @@ async def transcribe_with_sarvam(recording_url: str) -> str:
         ) as audio_stream:
             
             if audio_stream.status_code != 200:
-                print(f"❌ Failed to access recording: {audio_stream.status_code}")
                 return ""
             
             # Collect audio chunks in memory
@@ -109,11 +102,7 @@ async def transcribe_with_sarvam(recording_url: str) -> str:
             
             audio_data = b''.join(audio_chunks)
         
-        download_time = time.time() - download_start
-        print(f"  ↪ Download Time: {download_time:.2f}s ({len(audio_data)} bytes)")
-        
         # Send to Smallest AI STT
-        # print(f"🔊 Forwarding to Smallest AI STT...")
         stt_start = time.time()
         stt_response = await client.post(
             SMALLEST_STT_URL,
@@ -127,21 +116,13 @@ async def transcribe_with_sarvam(recording_url: str) -> str:
             },
             content=audio_data
         )
-        stt_time = time.time() - stt_start
-        print(f"  ↪ API Call Time: {stt_time:.2f}s")
-        
         if stt_response.status_code == 200:
             result = stt_response.json()
             transcript = result.get("transcription", "")
-            # print(f"✅ STT Transcript: '{transcript}'")
             return transcript
         else:
-            print(f"❌ STT Error: {stt_response.status_code} - {stt_response.text}")
             return ""
     except Exception as e:
-        print(f"❌ STT Exception: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return ""
 
 
@@ -161,28 +142,37 @@ async def transcribe_audio_bytes(audio_bytes: bytes) -> str:
         
         # Send to Smallest AI STT
         stt_start = time.time()
+        
+        # Try with auto language detection first
         stt_response = await client.post(
             SMALLEST_STT_URL,
             params={
                 "model": "pulse",
-                "language": "hi"  # Hindi language code
-            },
+                "language": "hi"              },
             headers={
                 "Authorization": f"Bearer {SMALLEST_API_KEY}",
                 "Content-Type": "audio/wav"
             },
             content=audio_bytes
         )
-        stt_time = time.time() - stt_start
-        print(f"  ↪ STT API Time: {stt_time:.2f}s")
+        
+        print(f"📡 STT Response: {stt_response.status_code}")
         
         if stt_response.status_code == 200:
             result = stt_response.json()
+            print(f"📝 STT Result: {result}")
             transcript = result.get("transcription", "")
+            
+            # Check if transcription is in a different field
+            if not transcript:
+                transcript = result.get("text", result.get("transcript", ""))
+            
             return transcript
         else:
-            print(f"❌ STT Error: {stt_response.status_code} - {stt_response.text}")
+            print(f"❌ STT failed: {stt_response.text[:200]}")
             return ""
     except Exception as e:
         print(f"❌ STT Exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return ""

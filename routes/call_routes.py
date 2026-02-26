@@ -27,21 +27,16 @@ async def handle_voice_stream(request: Request):
     """
     response = VoiceResponse()
     
-    # Play brief welcome
-    response.say(
-        "नमस्ते",
-        voice='Polly.Aditi',
-        language='hi-IN'
+    # Start bidirectional media streaming first
+    connect = response.connect()
+    connect.stream(
+        url=f"wss://{BASE_URL.replace('https://', '').replace('http://', '')}/media-stream"
     )
     
-    # Start bidirectional media streaming
-    stream = response.start().stream(
-        url=f"wss://{BASE_URL.replace('https://', '').replace('http://', '')}/media-stream",
-        track='both_tracks'  # Send and receive audio
-    )
+    # Keep the call alive for 60 seconds (adjust as needed)
+    response.pause(length=60)
     
-    print(f"📡 Started Media Stream to WebSocket")
-    
+
     return Response(content=str(response), media_type="application/xml")
 
 

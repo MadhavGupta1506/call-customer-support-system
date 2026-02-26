@@ -22,5 +22,5 @@ SMALLEST_STT_URL = "https://waves-api.smallest.ai/api/v1/pulse/get_text"
 
 # Webhook URLs (update with your ngrok URL)
 BASE_URL = "https://retrorse-miracle-grenadierial.ngrok-free.dev"
-VOICE_WEBHOOK = f"{BASE_URL}/voice"
+VOICE_WEBHOOK = f"{BASE_URL}/voice-stream"
 PROCESS_WEBHOOK = f"{BASE_URL}/process"

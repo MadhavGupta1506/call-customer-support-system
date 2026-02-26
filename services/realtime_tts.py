@@ -107,12 +107,9 @@ async def generate_single_tts(text: str) -> str:
             # Cache for future use
             cache_tts(text, audio_url)
             
-            tts_time = time.time() - tts_start
-            print(f"  ✅ TTS ready: {len(audio_bytes)} bytes in {tts_time:.3f}s")
             return audio_url
         
         return None
         
     except Exception as e:
-        print(f"❌ TTS Error: {str(e)}")
         return None
