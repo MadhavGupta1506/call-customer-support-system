@@ -4,11 +4,17 @@ Real-time progressive TTS generation while streaming LLM response.
 import re
 import asyncio
 import uuid
+import base64
 from typing import AsyncGenerator, Tuple
-from smallestai.waves import AsyncWavesClient
-from config import SMALLEST_API_KEY, BASE_URL
+
+# ---- Smallest AI (commented) ----
+# from smallestai.waves import AsyncWavesClient
+# from config import SMALLEST_API_KEY
+
+from config import SARVAM_API_KEY, SARVAM_TTS_URL, BASE_URL
 from services.audio_cache import store_audio
 from services.response_cache import get_cached_tts, cache_tts
+from services.http_client import get_http_client
 
 
 async def progressive_tts_generation(
@@ -64,7 +70,7 @@ async def progressive_tts_generation(
 
 async def generate_single_tts(text: str) -> str:
     """
-    Generate TTS for a single text segment.
+    Generate TTS for a single text segment using Sarvam AI.
     Ultra-optimized for speed with caching.
     
     Args:
@@ -77,6 +83,11 @@ async def generate_single_tts(text: str) -> str:
     tts_start = time.time()
     
     try:
+        # Validate input
+        if not text or not text.strip():
+            print("⚠️  Empty text provided to TTS, skipping")
+            return None
+        
         # Check cache first for instant response
         cached_url = await get_cached_tts(text)
         if cached_url:
@@ -84,19 +95,52 @@ async def generate_single_tts(text: str) -> str:
             print(f"  ⚡ Cache hit! ({cache_time:.3f}s)")
             return cached_url
         
-        # Use Smallest AI with optimized settings
-        client = AsyncWavesClient(
-            api_key=SMALLEST_API_KEY,
-            model="lightning-v2",
-            voice_id="shivangi",
-            language="hi",
-            sample_rate=8000,
-            speed=1.3,  # Even faster for responsiveness
-            output_format="wav"
+        # -------------------------------
+        # Smallest AI (commented)
+        # -------------------------------
+        # client = AsyncWavesClient(
+        #     api_key=SMALLEST_API_KEY,
+        #     model="lightning-v2",
+        #     voice_id="shivangi",
+        #     language="hi",
+        #     sample_rate=8000,
+        #     speed=1.3,
+        #     output_format="wav"
+        # )
+        # async with client as tts:
+        #     audio_bytes = await tts.synthesize(text)
+        
+        # -------------------------------
+        # Sarvam TTS
+        # -------------------------------
+        client = get_http_client()
+        response = await client.post(
+            SARVAM_TTS_URL,
+            headers={
+                "API-Subscription-Key": SARVAM_API_KEY,
+                "Content-Type": "application/json"
+            },
+            json={
+                "inputs": [text],
+                "target_language_code": "hi-IN",
+                "speaker": "ishita",
+                "speech_sample_rate": 8000,
+                "pace": 1.0,
+                "model": "bulbul:v3"
+            }
         )
         
-        async with client as tts:
-            audio_bytes = await tts.synthesize(text)
+        if response.status_code != 200:
+            error_text = response.text[:500] if hasattr(response, 'text') else 'No error details'
+            print(f"❌ Sarvam TTS error {response.status_code}: {error_text}")
+            return None
+        
+        result = response.json()
+        if "audios" not in result or not result["audios"]:
+            return None
+        
+        audio_base64 = result["audios"][0]
+        audio_bytes = base64.b64decode(audio_base64)
         
         if audio_bytes:
             # Store with short TTL (only need it for current call)

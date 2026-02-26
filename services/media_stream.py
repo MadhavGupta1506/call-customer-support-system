@@ -216,8 +216,8 @@ class MediaStreamHandler:
         Transcribe PCM audio using Smallest AI STT.
         """
         try:
-            # Check if we have enough audio (at least 0.5 second = 8000 bytes at 8kHz 16-bit)
-            if len(pcm_bytes) < 8000:
+            # Check if we have enough audio (at least 0.3 second = 4800 bytes at 8kHz 16-bit)
+            if len(pcm_bytes) < 4800:
                 print(f"⚠️  Audio too short: {len(pcm_bytes)} bytes")
                 return ""
             
@@ -229,7 +229,7 @@ class MediaStreamHandler:
             print(f"🔊 Audio RMS: {rms:.0f}, Length: {len(pcm_bytes)/16000:.2f}s")
             
             # If audio is too quiet, skip transcription (likely noise/silence)
-            if rms < 80:  # Moderate threshold for audio energy
+            if rms < 50:  # Lower threshold to handle quieter audio
                 print(f"⚠️  Audio too quiet (RMS {rms:.0f})")
                 return ""
             
